@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'dart:convert';
 
@@ -47,15 +49,15 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   String scaned = '';
   static const String _appId = 'dowell.qrcodescan.app&hl=en&gl=US';
   bool _showScanner = true;
-
   Map<String, dynamic> _extractedData = {};
-
   String extractedData = '';
+  late bool isActive;
+  late List<dynamic> data = [];
+  late String scanned;
 
   @override
   void dispose() {
     _controller?.dispose();
-
     super.dispose();
   }
 
@@ -93,22 +95,50 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   }
 
 // Function to make a POST API request to decrypt QR code
-  Future<Map<String, dynamic>> decryptQrcode(String qrcodeId, String iv) async {
+
+  Future<Map<String, dynamic>> decryptQrcode(String qrcodeId) async {
     final url = Uri.parse(
         'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt-qrcode/');
-    final body = jsonEncode({"qrcode_id": qrcodeId, "iv": iv});
-    final response = await http.post(url,
-        headers: {'Content-Type': 'application/json'}, body: body);
-    return json.decode(response.body);
+    final body = jsonEncode({
+      "qrcode_id": qrcodeId,
+    });
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        // Request was successful
+        print('POST request successful');
+        print('Response body: ${response.body}');
+
+        // Parse the response JSON
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        return responseData;
+      } else {
+        // Request failed
+        print('POST request failed with status code: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        throw Exception(
+            'Failed to decrypt QR code. Status Code: ${response.statusCode}');
+      }
+    } catch (error) {
+      // An error occurred
+      print('Error occurred during POST request: $error');
+      throw error;
+    }
   }
 
-  void _onQRViewCreated(QRViewController controller) async {
+  _onQRViewCreated(QRViewController controller) async {
     setState(() {
       _controller = controller;
     });
 
     _controller!.scannedDataStream.listen((scanData) async {
-      final scanned = scanData.code!;
+       scanned = scanData.code!;
       setState(() {
         extractedData = scanned;
         _showScanner = false;
@@ -132,18 +162,66 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           // final iv = qrCodeData['iv'];
           // Make POST request to decrypt QR code
           // Extract additional fields from qrCodeData
-          final productName = qrCodeData['response'][0]['product_name'];
-          final qrcodeImageUrl = qrCodeData['response'][0]['qrcode_image_url'];
-          final createdBy = qrCodeData['response'][0]['created_by'];
 
-          // final decryptedData = await decryptQrcode(qrcodeId, iv);
-          // final decryptData = decryptedData['qrcode_id'];
-          // print('The extracted data from decrypt endpoint: $decryptData');
+          final decryptedData = await decryptQrcode(
+            qrcodeId,
+          );
+          data = decryptedData['response']['data'];
+          print('The extracted data from decrypt endpoint: $decryptedData');
           setState(() {
-            _extractedData = qrCodeData;
+            _extractedData = decryptedData;
             print(_extractedData);
             _showScanner = false;
           });
+
+          if (data.isNotEmpty) {
+            final Map<String, dynamic> decryptqrCodeData = data.first;
+            isActive = decryptqrCodeData['is_active'] ?? false;
+
+            if (!isActive) {
+              // Show alert dialog if is_active is false
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text(
+                      'QR Code Not Activated',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    content: const Text(
+                      'The QR code is not activated yet. Use the QR code app to activate your QR code.',
+                      style: TextStyle(
+                        fontSize: 18,
+                      ),
+                    ),
+                    actions: <Widget>[
+                      TextButton(
+                        onPressed: () {
+                          // Handle activation logic here
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text(
+                          'Ok',
+                          style: TextStyle(
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                      // TextButton(
+                      //   onPressed: () {
+                      //     Navigator.of(context).pop();
+                      //   },
+                      //   child: Text('Cancel'),
+                      // ),
+                    ],
+                  );
+                },
+              );
+            }
+          }
           // setState(() {
           //   _extractedData = extractedData;
           // });
@@ -163,8 +241,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           // Make POST request to decrypt QR code
           // Extract additional fields from qrCodeData
           final productName = qrCodeData['response'][0]['product_name'];
-          final qrcodeImageUrl = qrCodeData['response'][0]['qrcode_image_url'];
-          final createdBy = qrCodeData['response'][0]['created_by'];
 
           // final decryptedData = await decryptQrcode(qrcodeId, iv);
           // final decryptData = decryptedData['qrcode_id'];
@@ -179,7 +255,10 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           // });
         }
       } else {
-        checkType(scanned);
+        Future.delayed(const Duration(seconds: 2), () {
+          // Add a delay of 2 seconds before calling checkType
+          checkType(scanned);
+        });
       }
     });
   }
@@ -199,7 +278,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
   void _launchURL() {
     final uri = Uri.parse(_scannedCode);
-
     // if (await canLaunchUrl(uri)) {
     launchUrl(uri);
     // } else {
@@ -209,7 +287,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
   @override
   Widget build(BuildContext context) {
-    final List<dynamic>? itemList = _extractedData['response'];
+    late final List<dynamic> itemList = data;
     print("The item list of the extracted data is:  $itemList");
     return Scaffold(
       body: Column(
@@ -220,109 +298,128 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                     key: _qrKey,
                     onQRViewCreated: _onQRViewCreated,
                     overlay: QrScannerOverlayShape(
-                      borderColor: const Color.fromARGB(30, 76, 175, 79),
+                      borderColor: Color.fromARGB(30, 65, 137, 67),
                       borderRadius: 10,
                       borderLength: 30,
                       borderWidth: 10,
-                      cutOutSize: 300,
+                      cutOutSize: 350,
                     ),
                   )
                 : itemList == null
-                    ? Container(
-                        height: 250,
-                        width: 500,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                        ),
-                        child: Center(child: CircularProgressIndicator()))
-                    : GestureDetector(
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                                left: 15.0, right: 15.0, top: 50.0, bottom: 30,),
-                            child: ListView.separated(
-                              itemCount: itemList.length,
-                              separatorBuilder:
-                                  (BuildContext context, int index) =>
-                                      SizedBox(height: 18),
-                              itemBuilder: (BuildContext context, int index) {
-                                final Map<String, dynamic>? item =
-                                    itemList[index];
-                                print('The items are: $item');
-                                if (item != null) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      // boxShadow: [
-                                      //   BoxShadow(
-                                      //     offset: const Offset(0, 5),
-                                      //     blurRadius: 10.0,
-                                      //     color: Colors.black.withOpacity(0.5),
-                                      //   ),
-                                      // ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: item.entries.map((entry) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 15, vertical: 18),
-                                          child: TextFormField(
-                                            textAlign: TextAlign.start,
-                                            initialValue:
-                                                ' ${entry.value ?? 'N/A'}',
-                                            cursorColor: Colors.black,
-                                            style:
-                                                TextStyle(color: Colors.black, fontSize: 15,),
-                                            readOnly: true,
-                                            onTap: () {
-                                              // Enable text selection when tapped
-                                              FocusScope.of(context)
-                                                  .requestFocus(
-                                                      new FocusNode());
-                                            },
-                                                 // Ensure text is displayed within a single line
-                                            maxLines: 1,
-                                            decoration: InputDecoration(
-                                              contentPadding:
-                                                  EdgeInsets.fromLTRB(
-                                                      4.0, 0.0, 4.0, 0.0),
-                                              filled: false,
-                                              fillColor: Colors.transparent,
-                                              labelText: entry.key,
-                                              labelStyle: TextStyle(
-                                                  color: Color(0xFF187B2B), fontSize: 20,),
-                                              border: OutlineInputBorder(
-                                                gapPadding: 0.0,
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                    color: Color(0xFF187B2B)),
+                        ? Container(
+                            height: 250,
+                            width: 500,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                            ),
+                            child: const Center(
+                                child: CircularProgressIndicator()))
+                        : GestureDetector(
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 15.0,
+                                  right: 15.0,
+                                  top: 50.0,
+                                  bottom: 30,
+                                ),
+                                child: ListView.separated(
+                                  itemCount: itemList.length,
+                                  separatorBuilder:
+                                      (BuildContext context, int index) =>
+                                          const SizedBox(height: 18),
+                                  itemBuilder:
+                                      (BuildContext context, int index) {
+                                    final Map<String, dynamic>? item =
+                                        itemList[index];
+                                    print('The items are: $item');
+                                    if (item != null) {
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          // boxShadow: [
+                                          //   BoxShadow(
+                                          //     offset: const Offset(0, 5),
+                                          //     blurRadius: 10.0,
+                                          //     color: Colors.black.withOpacity(0.5),
+                                          //   ),
+                                          // ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: item.entries.map((entry) {
+                                            return Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 15,
+                                                      vertical: 18),
+                                              child: TextFormField(
+                                                textAlign: TextAlign.start,
+                                                initialValue:
+                                                    ' ${entry.value ?? 'N/A'}',
+                                                cursorColor: Colors.black,
+                                                style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 15,
+                                                ),
+                                                readOnly: true,
+                                                onTap: () {
+                                                  // Enable text selection when tapped
+                                                  FocusScope.of(context)
+                                                      .requestFocus(
+                                                          new FocusNode());
+                                                },
+                                                // Ensure text is displayed within a single line
+                                                maxLines: 1,
+                                                decoration: InputDecoration(
+                                                  contentPadding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          4.0, 0.0, 4.0, 0.0),
+                                                  filled: false,
+                                                  fillColor: Colors.transparent,
+                                                  labelText: entry.key,
+                                                  labelStyle: const TextStyle(
+                                                    color: Color(0xFF187B2B),
+                                                    fontSize: 20,
+                                                  ),
+                                                  border: OutlineInputBorder(
+                                                    gapPadding: 0.0,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
+                                                    borderSide:
+                                                        const BorderSide(
+                                                            color: Color(
+                                                                0xFF187B2B)),
+                                                  ),
+                                                  focusedBorder:
+                                                      OutlineInputBorder(
+                                                    gapPadding: 0.0,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
+                                                    borderSide:
+                                                        const BorderSide(
+                                                            width: 3,
+                                                            color: Color(
+                                                                0xFF187B2B)),
+                                                  ),
+                                                ),
                                               ),
-                                              focusedBorder: OutlineInputBorder(
-                                                gapPadding: 0.0,
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                    width: 3,
-                                                    color: Color(0xFF187B2B)),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  );
-                                }
-
-                                return SizedBox(); // Return an empty SizedBox if item is null or index is out of bounds
-                              },
+                                            );
+                                          }).toList(),
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox(); // Return an empty SizedBox if item is null or index is out of bounds
+                                  },
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
           ),
         ],
       ),
