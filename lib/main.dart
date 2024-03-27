@@ -51,9 +51,10 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   bool _showScanner = true;
   Map<String, dynamic> _extractedData = {};
   String extractedData = '';
-  late bool isActive;
-  late List<dynamic> data = [];
+  bool isActive = false;
+  List<dynamic> data = [];
   late String scanned;
+  late String qrcodeId;
 
   @override
   void dispose() {
@@ -138,7 +139,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     });
 
     _controller!.scannedDataStream.listen((scanData) async {
-       scanned = scanData.code!;
+      scanned = scanData.code!;
       setState(() {
         extractedData = scanned;
         _showScanner = false;
@@ -149,7 +150,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         final regex = RegExp(r'encrypted with (\S+) and (\S+)');
         final match = regex.firstMatch(extractedData);
         if (match != null) {
-          final qrcodeId = match.group(1)!;
+           qrcodeId = match.group(1)!;
           final iv = match.group(2)!;
           print('QR code ID: $qrcodeId');
           print('IV: $iv');
@@ -177,50 +178,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           if (data.isNotEmpty) {
             final Map<String, dynamic> decryptqrCodeData = data.first;
             isActive = decryptqrCodeData['is_active'] ?? false;
-
-            if (!isActive) {
-              // Show alert dialog if is_active is false
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Text(
-                      'QR Code Not Activated',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    content: const Text(
-                      'The QR code is not activated yet. Use the QR code app to activate your QR code.',
-                      style: TextStyle(
-                        fontSize: 18,
-                      ),
-                    ),
-                    actions: <Widget>[
-                      TextButton(
-                        onPressed: () {
-                          // Handle activation logic here
-                          Navigator.of(context).pop();
-                        },
-                        child: const Text(
-                          'Ok',
-                          style: TextStyle(
-                            fontSize: 18,
-                          ),
-                        ),
-                      ),
-                      // TextButton(
-                      //   onPressed: () {
-                      //     Navigator.of(context).pop();
-                      //   },
-                      //   child: Text('Cancel'),
-                      // ),
-                    ],
-                  );
-                },
-              );
-            }
           }
           // setState(() {
           //   _extractedData = extractedData;
@@ -236,7 +193,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           final qrCodeData = await getQrCodeById(qrId);
           print('The data from the get request is: $qrCodeData ');
           // Extract qrcode_id and iv from qrCodeData
-          final qrcodeId = qrCodeData['qrcode_id'];
+          qrcodeId = qrCodeData['qrcode_id'];
           final iv = qrCodeData['iv'];
           // Make POST request to decrypt QR code
           // Extract additional fields from qrCodeData
@@ -306,28 +263,70 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                     ),
                   )
                 : itemList == null
-                        ? Container(
-                            height: 250,
-                            width: 500,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
+                    ? Container(
+                        height: 250,
+                        width: 500,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                        ),
+                        child: Center(child: CircularProgressIndicator()))
+                    : isActive == false
+                        // Show alert dialog if is_active is false
+                        ? Center(
+                          child: Padding(
+                              padding: const EdgeInsets.only(left: 28.0, right: 28, top: 250,),
+                              child: Container(
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'QR Code Not Activated',
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    SizedBox(height: 20),
+                                    SelectableText(
+                                      'The QR code is not activated yet. Using the qr code with id ${qrcodeId} Use the QR code app to activate your QR code.',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    SizedBox(height: 20),
+                                    SizedBox(
+                                      width: 120,
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          await launchAppStoreRedirect(_appId);
+                                          // Navigator.of(context).pop();
+                                        },
+                                        child: const Text(
+                                          'Ok',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: const Center(
-                                child: CircularProgressIndicator()))
+                        )
                         : GestureDetector(
                             child: Center(
                               child: Padding(
                                 padding: const EdgeInsets.only(
                                   left: 15.0,
                                   right: 15.0,
-                                  top: 50.0,
                                   bottom: 30,
                                 ),
                                 child: ListView.separated(
                                   itemCount: itemList.length,
                                   separatorBuilder:
                                       (BuildContext context, int index) =>
-                                          const SizedBox(height: 18),
+                                          SizedBox(height: 18),
                                   itemBuilder:
                                       (BuildContext context, int index) {
                                     final Map<String, dynamic>? item =
@@ -361,7 +360,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                                 initialValue:
                                                     ' ${entry.value ?? 'N/A'}',
                                                 cursorColor: Colors.black,
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   color: Colors.black,
                                                   fontSize: 15,
                                                 ),
@@ -376,12 +375,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                                 maxLines: 1,
                                                 decoration: InputDecoration(
                                                   contentPadding:
-                                                      const EdgeInsets.fromLTRB(
+                                                      EdgeInsets.fromLTRB(
                                                           4.0, 0.0, 4.0, 0.0),
                                                   filled: false,
                                                   fillColor: Colors.transparent,
                                                   labelText: entry.key,
-                                                  labelStyle: const TextStyle(
+                                                  labelStyle: TextStyle(
                                                     color: Color(0xFF187B2B),
                                                     fontSize: 20,
                                                   ),
@@ -390,10 +389,9 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             10),
-                                                    borderSide:
-                                                        const BorderSide(
-                                                            color: Color(
-                                                                0xFF187B2B)),
+                                                    borderSide: BorderSide(
+                                                        color:
+                                                            Color(0xFF187B2B)),
                                                   ),
                                                   focusedBorder:
                                                       OutlineInputBorder(
@@ -401,11 +399,10 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             10),
-                                                    borderSide:
-                                                        const BorderSide(
-                                                            width: 3,
-                                                            color: Color(
-                                                                0xFF187B2B)),
+                                                    borderSide: BorderSide(
+                                                        width: 3,
+                                                        color:
+                                                            Color(0xFF187B2B)),
                                                   ),
                                                 ),
                                               ),
@@ -414,7 +411,11 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                         ),
                                       );
                                     }
-                                    return const SizedBox(); // Return an empty SizedBox if item is null or index is out of bounds
+
+                                    return SizedBox(
+                                      child: Text(
+                                          'Error extracting the qrcode details. '),
+                                    ); // Return an empty SizedBox if item is null or index is out of bounds
                                   },
                                 ),
                               ),
