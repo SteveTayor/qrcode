@@ -133,13 +133,21 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     }
   }
 
-  _onQRViewCreated(QRViewController controller) async {
+  bool _isLink(String data) {
+    final RegExp urlRegex = RegExp(
+      r'^(?:http|https):\/\/[\w\-]+(\.[\w\-]+)+[/#?]?.*',
+      caseSensitive: false,
+    );
+    return urlRegex.hasMatch(data);
+  }
+
+  void _onQRViewCreated(QRViewController controller) async {
     setState(() {
       _controller = controller;
     });
 
     _controller!.scannedDataStream.listen((scanData) async {
-      scanned = scanData.code!;
+      final scanned = scanData.code!;
       setState(() {
         extractedData = scanned;
         _showScanner = false;
@@ -150,10 +158,10 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         final regex = RegExp(r'encrypted with (\S+) and (\S+)');
         final match = regex.firstMatch(extractedData);
         if (match != null) {
-           qrcodeId = match.group(1)!;
-          final iv = match.group(2)!;
+          qrcodeId = match.group(1)!;
+          // final iv = match.group(2)!;
           print('QR code ID: $qrcodeId');
-          print('IV: $iv');
+          // print('IV: $iv');
 
           // Make GET request to fetch QR code data by ID
           final qrCodeData = await getQrCodeById(qrcodeId);
@@ -183,6 +191,11 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           //   _extractedData = extractedData;
           // });
         }
+      } else if (_isLink(extractedData)) {
+        setState(() {
+          extractedData = extractedData;
+        });
+        await _launchURL(extractedData);
       } else if (extractedData.contains('Deactivated')) {
         final splitedString = extractedData.split(' ');
         if (splitedString.length > 4) {
@@ -193,11 +206,13 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           final qrCodeData = await getQrCodeById(qrId);
           print('The data from the get request is: $qrCodeData ');
           // Extract qrcode_id and iv from qrCodeData
-          qrcodeId = qrCodeData['qrcode_id'];
-          final iv = qrCodeData['iv'];
+          final qrcodeId = qrCodeData['qrcode_id'];
+          // final iv = qrCodeData['iv'];
           // Make POST request to decrypt QR code
           // Extract additional fields from qrCodeData
           final productName = qrCodeData['response'][0]['product_name'];
+          final qrcodeImageUrl = qrCodeData['response'][0]['qrcode_image_url'];
+          final createdBy = qrCodeData['response'][0]['created_by'];
 
           // final decryptedData = await decryptQrcode(qrcodeId, iv);
           // final decryptData = decryptedData['qrcode_id'];
@@ -212,10 +227,8 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           // });
         }
       } else {
-        Future.delayed(const Duration(seconds: 2), () {
-          // Add a delay of 2 seconds before calling checkType
-          checkType(scanned);
-        });
+        // Add a delay of 2 seconds before calling checkType
+        checkType(scanned);
       }
     });
   }
@@ -233,13 +246,13 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     }
   }
 
-  void _launchURL() {
-    final uri = Uri.parse(_scannedCode);
-    // if (await canLaunchUrl(uri)) {
-    launchUrl(uri);
-    // } else {
-    //   // can't launch url
-    // }
+  _launchURL(String data) async {
+    final uri = Uri.parse(data);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      // Handle cases where URL cannot be launched
+    }
   }
 
   @override
@@ -262,165 +275,191 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                       cutOutSize: 350,
                     ),
                   )
-                : itemList == null
-                    ? Container(
-                        height: 250,
-                        width: 500,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                        ),
-                        child: Center(child: CircularProgressIndicator()))
-                    : isActive == false
-                        // Show alert dialog if is_active is false
-                        ? Center(
+                : _isLink(extractedData)
+                    ? Center(
+                        child: GestureDetector(
+                          onTap: () => _launchURL(extractedData),
                           child: Padding(
-                              padding: const EdgeInsets.only(left: 28.0, right: 28, top: 250,),
-                              child: Container(
-                                child: Column(
-                                  children: [
-                                    const Text(
-                                      'QR Code Not Activated',
-                                      style: TextStyle(
-                                        fontSize: 30,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    SizedBox(height: 20),
-                                    SelectableText(
-                                      'The QR code is not activated yet. Using the qr code with id ${qrcodeId} Use the QR code app to activate your QR code.',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    SizedBox(height: 20),
-                                    SizedBox(
-                                      width: 120,
-                                      child: ElevatedButton(
-                                        onPressed: () async {
-                                          await launchAppStoreRedirect(_appId);
-                                          // Navigator.of(context).pop();
-                                        },
-                                        child: const Text(
-                                          'Ok',
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 25.0),
+                            child: SelectableText(
+                              extractedData,
+                              style: TextStyle(fontSize: 20),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      )
+                    : itemList.isEmpty == true
+                        ? Container(
+                            height: 250,
+                            width: 500,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                            ),
+                            child: Center(child: CircularProgressIndicator()))
+                        : isActive == false
+                            // Show alert dialog if is_active is false
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 28.0,
+                                    right: 28,
+                                    top: 250,
+                                  ),
+                                  child: Container(
+                                    child: Column(
+                                      children: [
+                                        const Text(
+                                          'QR Code Not Activated',
+                                          style: TextStyle(
+                                            fontSize: 30,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        SizedBox(height: 20),
+                                        SelectableText(
+                                          'The QR code with decrpyted id ${qrcodeId} is not activated yet. Use the QR code app to activate your QR code.',
                                           style: TextStyle(
                                             fontSize: 18,
                                           ),
                                         ),
-                                      ),
+                                        SizedBox(height: 20),
+                                        // SizedBox(
+                                        //   width: 120,
+                                        //   child: ElevatedButton(
+                                        //     onPressed: () async {
+                                        //       await launchAppStoreRedirect(_appId);
+                                        //       // Navigator.of(context).pop();
+                                        //     },
+                                        //     child: const Text(
+                                        //       'Ok',
+                                        //       style: TextStyle(
+                                        //         fontSize: 18,
+                                        //       ),
+                                        //     ),
+                                        //   ),
+                                        // ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                        )
-                        : GestureDetector(
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 15.0,
-                                  right: 15.0,
-                                  bottom: 30,
-                                ),
-                                child: ListView.separated(
-                                  itemCount: itemList.length,
-                                  separatorBuilder:
-                                      (BuildContext context, int index) =>
-                                          SizedBox(height: 18),
-                                  itemBuilder:
-                                      (BuildContext context, int index) {
-                                    final Map<String, dynamic>? item =
-                                        itemList[index];
-                                    print('The items are: $item');
-                                    if (item != null) {
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          // boxShadow: [
-                                          //   BoxShadow(
-                                          //     offset: const Offset(0, 5),
-                                          //     blurRadius: 10.0,
-                                          //     color: Colors.black.withOpacity(0.5),
-                                          //   ),
-                                          // ],
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: item.entries.map((entry) {
-                                            return Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
+                              )
+                            : GestureDetector(
+                                child: Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 15.0,
+                                      right: 15.0,
+                                      bottom: 30,
+                                    ),
+                                    child: ListView.separated(
+                                      itemCount: itemList.length,
+                                      separatorBuilder:
+                                          (BuildContext context, int index) =>
+                                              SizedBox(height: 18),
+                                      itemBuilder:
+                                          (BuildContext context, int index) {
+                                        final Map<String, dynamic>? item =
+                                            itemList[index];
+                                        print('The items are: $item');
+                                        if (item != null) {
+                                          return Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              // boxShadow: [
+                                              //   BoxShadow(
+                                              //     offset: const Offset(0, 5),
+                                              //     blurRadius: 10.0,
+                                              //     color: Colors.black.withOpacity(0.5),
+                                              //   ),
+                                              // ],
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children:
+                                                  item.entries.map((entry) {
+                                                return Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
                                                       horizontal: 15,
                                                       vertical: 18),
-                                              child: TextFormField(
-                                                textAlign: TextAlign.start,
-                                                initialValue:
-                                                    ' ${entry.value ?? 'N/A'}',
-                                                cursorColor: Colors.black,
-                                                style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 15,
-                                                ),
-                                                readOnly: true,
-                                                onTap: () {
-                                                  // Enable text selection when tapped
-                                                  FocusScope.of(context)
-                                                      .requestFocus(
-                                                          new FocusNode());
-                                                },
-                                                // Ensure text is displayed within a single line
-                                                maxLines: 1,
-                                                decoration: InputDecoration(
-                                                  contentPadding:
-                                                      EdgeInsets.fromLTRB(
-                                                          4.0, 0.0, 4.0, 0.0),
-                                                  filled: false,
-                                                  fillColor: Colors.transparent,
-                                                  labelText: entry.key,
-                                                  labelStyle: TextStyle(
-                                                    color: Color(0xFF187B2B),
-                                                    fontSize: 20,
-                                                  ),
-                                                  border: OutlineInputBorder(
-                                                    gapPadding: 0.0,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                    borderSide: BorderSide(
+                                                  child: TextFormField(
+                                                    textAlign: TextAlign.start,
+                                                    initialValue:
+                                                        ' ${entry.value ?? 'N/A'}',
+                                                    cursorColor: Colors.black,
+                                                    style: TextStyle(
+                                                      color: Colors.black,
+                                                      fontSize: 15,
+                                                    ),
+                                                    readOnly: true,
+                                                    onTap: () {
+                                                      // Enable text selection when tapped
+                                                      FocusScope.of(context)
+                                                          .requestFocus(
+                                                              new FocusNode());
+                                                    },
+                                                    // Ensure text is displayed within a single line
+                                                    maxLines: 1,
+                                                    decoration: InputDecoration(
+                                                      contentPadding:
+                                                          EdgeInsets.fromLTRB(
+                                                              4.0,
+                                                              0.0,
+                                                              4.0,
+                                                              0.0),
+                                                      filled: false,
+                                                      fillColor:
+                                                          Colors.transparent,
+                                                      labelText: entry.key,
+                                                      labelStyle: TextStyle(
                                                         color:
-                                                            Color(0xFF187B2B)),
+                                                            Color(0xFF187B2B),
+                                                        fontSize: 20,
+                                                      ),
+                                                      border:
+                                                          OutlineInputBorder(
+                                                        gapPadding: 0.0,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(10),
+                                                        borderSide: BorderSide(
+                                                            color: Color(
+                                                                0xFF187B2B)),
+                                                      ),
+                                                      focusedBorder:
+                                                          OutlineInputBorder(
+                                                        gapPadding: 0.0,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(10),
+                                                        borderSide: BorderSide(
+                                                            width: 3,
+                                                            color: Color(
+                                                                0xFF187B2B)),
+                                                      ),
+                                                    ),
                                                   ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    gapPadding: 0.0,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10),
-                                                    borderSide: BorderSide(
-                                                        width: 3,
-                                                        color:
-                                                            Color(0xFF187B2B)),
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                      );
-                                    }
+                                                );
+                                              }).toList(),
+                                            ),
+                                          );
+                                        }
 
-                                    return SizedBox(
-                                      child: Text(
-                                          'Error extracting the qrcode details. '),
-                                    ); // Return an empty SizedBox if item is null or index is out of bounds
-                                  },
+                                        return SizedBox(
+                                          child: Text(
+                                              'Error extracting the qrcode details. '),
+                                        ); // Return an empty SizedBox if item is null or index is out of bounds
+                                      },
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
           ),
         ],
       ),
