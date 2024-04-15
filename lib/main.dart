@@ -55,6 +55,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   List<dynamic> data = [];
   late String scanned;
   late String qrcodeId;
+  String redirectLink = '';
 
   @override
   void dispose() {
@@ -99,16 +100,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
   Future<Map<String, dynamic>> decryptQrcode(String qrcodeId) async {
     final url = Uri.parse(
-        'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt-qrcode/');
-    final body = jsonEncode({
-      "qrcode_id": qrcodeId,
-    });
+        'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt/$qrcodeId/');
 
     try {
-      final response = await http.post(
+      final response = await http.get(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: body,
       );
 
       if (response.statusCode == 200) {
@@ -134,11 +131,8 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   }
 
   bool _isLink(String data) {
-    final RegExp urlRegex = RegExp(
-      r'^(?:http|https):\/\/[\w\-]+(\.[\w\-]+)+[/#?]?.*',
-      caseSensitive: false,
-    );
-    return urlRegex.hasMatch(data);
+    final Uri? uri = Uri.tryParse(data);
+    return uri != null && uri.scheme.isNotEmpty && uri.host.isNotEmpty;
   }
 
   void _onQRViewCreated(QRViewController controller) async {
@@ -159,16 +153,14 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         final match = regex.firstMatch(extractedData);
         if (match != null) {
           qrcodeId = match.group(1)!;
-          // final iv = match.group(2)!;
           print('QR code ID: $qrcodeId');
           // Make GET request to fetch QR code data by ID
           final qrCodeData = await getQrCodeById(qrcodeId);
           print('The data from the get request is: $qrCodeData ');
-
           final decryptedData = await decryptQrcode(
             qrcodeId,
           );
-          data = decryptedData['response']['data'];
+          data = decryptedData['response'];
           print('The extracted data from decrypt endpoint: $decryptedData');
           setState(() {
             _extractedData = decryptedData;
@@ -179,31 +171,67 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           if (data.isNotEmpty) {
             final Map<String, dynamic> decryptqrCodeData = data.first;
             isActive = decryptqrCodeData['is_active'] ?? false;
+            redirectLink = decryptqrCodeData['redirect_link'];
           }
+          // setState(() {
+          //   _extractedData = extractedData;
+          // });
         }
       } else if (_isLink(extractedData)) {
+        final Uri uri = Uri.parse(extractedData);
+        qrcodeId = uri.pathSegments.last;
+        print('QR code ID: $qrcodeId');
+        final qrCodeData = await getQrCodeById(qrcodeId);
+        print('The data from the get request is: $qrCodeData ');
+        final decryptedData = await decryptQrcode(
+          qrcodeId,
+        );
+        data = decryptedData['response'];
+        print('The extracted data from decrypt endpoint: $decryptedData');
         setState(() {
-          extractedData = extractedData;
+          _extractedData = decryptedData;
+          print(_extractedData);
+          _showScanner = false;
         });
-        await _launchURL(extractedData);
+
+        if (data.isNotEmpty) {
+          final Map<String, dynamic> decryptqrCodeData = data.first;
+          isActive = decryptqrCodeData['is_active'] ?? false;
+          redirectLink = decryptqrCodeData['redirect_link'] == null
+              ? ''
+              : decryptqrCodeData['redirect_link'];
+        }
+        if (isActive) {
+          // await _launchURL(redirectLink);
+          await _launchInBrowserView(Uri.parse(redirectLink));
+        }
+        // await _launchURL(extractedData);
       } else if (extractedData.contains('Deactivated')) {
         final splitedString = extractedData.split(' ');
         if (splitedString.length > 4) {
           final qrId = splitedString[4];
           print('The QR ID to fetch: $qrId');
-
+          // FFAppState().qr = qrId;
+          // Make GET request to fetch QR code data by ID
           final qrCodeData = await getQrCodeById(qrId);
           print('The data from the get request is: $qrCodeData ');
+          // Extract qrcode_id and iv from qrCodeData
           final qrcodeId = qrCodeData['qrcode_id'];
           final productName = qrCodeData['response'][0]['product_name'];
           final qrcodeImageUrl = qrCodeData['response'][0]['qrcode_image_url'];
           final createdBy = qrCodeData['response'][0]['created_by'];
 
+          // final decryptedData = await decryptQrcode(qrcodeId, iv);
+          // final decryptData = decryptedData['qrcode_id'];
+          // print('The extracted data from decrypt endpoint: $decryptData');
           setState(() {
             _extractedData = qrCodeData;
             print(_extractedData);
             _showScanner = false;
           });
+          // setState(() {
+          //   _extractedData = extractedData;
+          // });
         }
       } else {
         // Add a delay of 2 seconds before calling checkType
@@ -225,12 +253,9 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     }
   }
 
-  _launchURL(String data) async {
-    final uri = Uri.parse(data);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      // Handle cases where URL cannot be launched
+  Future<void> _launchInBrowserView(Uri url) async {
+    if (!await launchUrl(url, mode: LaunchMode.inAppBrowserView)) {
+      throw Exception('Could not launch $url');
     }
   }
 
@@ -254,31 +279,48 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                       cutOutSize: 350,
                     ),
                   )
-                : _isLink(extractedData)
-                    ? Center(
-                        child: GestureDetector(
-                          onTap: () => _launchURL(extractedData),
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 25.0),
-                            child: SelectableText(
-                              extractedData,
-                              style: TextStyle(fontSize: 20),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
+                : itemList.isEmpty == true
+                    ? Container(
+                        height: 250,
+                        width: 500,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
                         ),
-                      )
-                    : itemList.isEmpty == true
-                        ? Container(
-                            height: 250,
-                            width: 500,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
+                        child: Center(child: CircularProgressIndicator()))
+                    : isActive == false
+                        // Show alert dialog if is_active is false
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                left: 28.0,
+                                right: 28,
+                                top: 250,
+                              ),
+                              child: Container(
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'QR Code Not Activated',
+                                      style: TextStyle(
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    SizedBox(height: 20),
+                                    SelectableText(
+                                      'The QR code is not activated yet. Use the QR code app to activate your QR code.',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    SizedBox(height: 20),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Center(child: CircularProgressIndicator()))
-                        : isActive == false
-                            // Show alert dialog if is_active is false
+                          )
+                        : isActive == true
                             ? Center(
                                 child: Padding(
                                   padding: const EdgeInsets.only(
@@ -286,41 +328,19 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                     right: 28,
                                     top: 250,
                                   ),
-                                  child: Container(
-                                    child: Column(
-                                      children: [
-                                        const Text(
-                                          'QR Code Not Activated',
-                                          style: TextStyle(
-                                            fontSize: 30,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        SizedBox(height: 20),
-                                        SelectableText(
-                                          'The QR code with decrpyted id ${qrcodeId} is not activated yet. Use the QR code app to activate your QR code.',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                          ),
-                                        ),
-                                        SizedBox(height: 20),
-                                        // SizedBox(
-                                        //   width: 120,
-                                        //   child: ElevatedButton(
-                                        //     onPressed: () async {
-                                        //       await launchAppStoreRedirect(_appId);
-                                        //       // Navigator.of(context).pop();
-                                        //     },
-                                        //     child: const Text(
-                                        //       'Ok',
-                                        //       style: TextStyle(
-                                        //         fontSize: 18,
-                                        //       ),
-                                        //     ),
-                                        //   ),
-                                        // ),
-                                      ],
+                                  child: InkWell(
+                                    onTap: () async {
+                                      // _launchURL(redirectLink);
+                                      await _launchInBrowserView(
+                                          Uri.parse(redirectLink));
+                                    },
+                                    child: Text(
+                                      redirectLink,
+                                      style: TextStyle(
+                                        fontSize: 23,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
                                     ),
                                   ),
                                 ),
