@@ -91,9 +91,53 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
   Future<Map<String, dynamic>> getQrCodeById(String id) async {
     final url = Uri.parse(
-        'https://www.qrcodereviews.uxlivinglab.online/api/v5/update-qr-code/$id/');
-    final response = await http.get(url);
-    return json.decode(response.body);
+        'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt-qrcode/?id=$id');
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        // FFAppState().decryptActiveData = responseData; // Store decoded JSON data
+        // Extract is_active and redirect_link from the response
+        final Map<String, dynamic> qrResponse = responseData['response'];
+        print('qrResponse: $qrResponse');
+
+        if (qrResponse.containsKey('data')) {
+          final List<dynamic> qrDataList = qrResponse['data'];
+          print("qrdatalist : $qrDataList");
+
+          if (qrDataList.isNotEmpty) {
+            final Map<String, dynamic> qrData = qrDataList.first;
+            isActive = qrData['is_active'] == 'true' ? true : false;
+            print("qrdatalist isActive : $isActive");
+            redirectLink = qrData['redirect_link'] ?? '';
+            print("qrdatalist redirectLink: $redirectLink");
+            // You have is_active and redirect_link available
+            // You can store or use them as needed
+
+            return responseData;
+          } else {
+            throw Exception('No data found for QR code ID: $id');
+          }
+        } else {
+          throw Exception('No data key found in response.');
+        }
+      } else {
+        // Request failed
+        print('GET request failed with status code: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        throw Exception(
+            'Failed to get QR code data. Status Code: ${response.statusCode}');
+      }
+    } catch (error) {
+      // An error occurred
+      print('Error occurred during GET request: $error');
+      throw error;
+    }
   }
 
 // Function to make a POST API request to decrypt QR code
@@ -173,9 +217,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
             isActive = decryptqrCodeData['is_active'] ?? false;
             redirectLink = decryptqrCodeData['redirect_link'];
           }
-          // setState(() {
-          //   _extractedData = extractedData;
-          // });
         }
       } else if (_isLink(extractedData)) {
         final Uri uri = Uri.parse(extractedData);
@@ -194,11 +235,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           _showScanner = false;
         });
 
-        if (data.isNotEmpty) {
-          final Map<String, dynamic> decryptqrCodeData = data.first;
-          isActive = decryptqrCodeData['is_active'] ?? false;
-          redirectLink = decryptqrCodeData['redirect_link'] ?? '';
-        }
         if (isActive) {
           // await _launchURL(redirectLink);
           await _launchInBrowserView(Uri.parse(redirectLink));
@@ -262,9 +298,9 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     late final List<dynamic> itemList = data;
     print("The item list of the extracted data is:  $itemList");
     return Scaffold(
-      body: Column(
-        children: [
-          Expanded(
+        body: Column(
+      children: [
+        Expanded(
             child: _showScanner == true
                 ? QRView(
                     key: _qrKey,
@@ -285,181 +321,66 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                           color: Colors.white,
                         ),
                         child: const Center(child: CircularProgressIndicator()))
-                    : isActive == false
-                        // Show alert dialog if is_active is false
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                left: 28.0,
-                                right: 28,
-                                top: 250,
-                              ),
-                              child: Container(
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      'QR Code Not Activated',
-                                      style: TextStyle(
-                                        fontSize: 30,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    SizedBox(height: 20),
-                                    SelectableText(
-                                      'The QR code is not activated yet. Use the QR code app to activate your QR code.',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    SizedBox(height: 20),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        : isActive == true
-                            ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 28.0,
-                                    right: 28,
-                                    top: 250,
-                                  ),
-                                  child: InkWell(
-                                    onTap: () async {
-                                      // _launchURL(redirectLink);
-                                      await _launchInBrowserView(
-                                          Uri.parse(redirectLink));
-                                    },
-                                    child: Text(
-                                      redirectLink,
-                                      style: const TextStyle(
-                                        fontSize: 23,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : GestureDetector(
-                                child: Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 15.0,
-                                      right: 15.0,
-                                      bottom: 30,
-                                    ),
-                                    child: ListView.separated(
-                                      itemCount: itemList.length,
-                                      separatorBuilder:
-                                          (BuildContext context, int index) =>
-                                              const SizedBox(height: 18),
-                                      itemBuilder:
-                                          (BuildContext context, int index) {
-                                        final Map<String, dynamic>? item =
-                                            itemList[index];
-                                        print('The items are: $item');
-                                        if (item != null) {
-                                          return Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              // boxShadow: [
-                                              //   BoxShadow(
-                                              //     offset: const Offset(0, 5),
-                                              //     blurRadius: 10.0,
-                                              //     color: Colors.black.withOpacity(0.5),
-                                              //   ),
-                                              // ],
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children:
-                                                  item.entries.map((entry) {
-                                                return Padding(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 15,
-                                                      vertical: 18),
-                                                  child: TextFormField(
-                                                    textAlign: TextAlign.start,
-                                                    initialValue:
-                                                        ' ${entry.value ?? 'N/A'}',
-                                                    cursorColor: Colors.black,
-                                                    style: const TextStyle(
-                                                      color: Colors.black,
-                                                      fontSize: 15,
-                                                    ),
-                                                    readOnly: true,
-                                                    onTap: () {
-                                                      // Enable text selection when tapped
-                                                      FocusScope.of(context)
-                                                          .requestFocus(
-                                                              FocusNode());
-                                                    },
-                                                    // Ensure text is displayed within a single line
-                                                    maxLines: 1,
-                                                    decoration: InputDecoration(
-                                                      contentPadding:
-                                                          const EdgeInsets
-                                                              .fromLTRB(4.0,
-                                                              0.0, 4.0, 0.0),
-                                                      filled: false,
-                                                      fillColor:
-                                                          Colors.transparent,
-                                                      labelText: entry.key,
-                                                      labelStyle:
-                                                          const TextStyle(
-                                                        color:
-                                                            Color(0xFF187B2B),
-                                                        fontSize: 20,
-                                                      ),
-                                                      border:
-                                                          OutlineInputBorder(
-                                                        gapPadding: 0.0,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(10),
-                                                        borderSide:
-                                                            const BorderSide(
-                                                                color: Color(
-                                                                    0xFF187B2B)),
-                                                      ),
-                                                      focusedBorder:
-                                                          OutlineInputBorder(
-                                                        gapPadding: 0.0,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(10),
-                                                        borderSide:
-                                                            const BorderSide(
-                                                                width: 3,
-                                                                color: Color(
-                                                                    0xFF187B2B)),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              }).toList(),
-                                            ),
-                                          );
-                                        }
+                    : isActive
+                        ? buildActiveQRCodeWidget(redirectLink)
+                        : buildInactiveQRCodeWidget()),
+      ],
+    ));
+  }
 
-                                        return const SizedBox(
-                                          child: Text(
-                                              'Error extracting the qrcode details. '),
-                                        ); // Return an empty SizedBox if item is null or index is out of bounds
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ),
+  Widget buildInactiveQRCodeWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: 28.0,
+          right: 28,
+        ),
+        child: Container(
+          child: Column(
+            children: [
+              const Text(
+                'QR Code Not Activated',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 20),
+              SelectableText(
+                'The QR code is not activated yet. Use the QR code app to activate your QR code.',
+                style: TextStyle(
+                  fontSize: 18,
+                ),
+              ),
+              SizedBox(height: 20),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildActiveQRCodeWidget(String redirectLink) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: 28.0,
+          right: 28,
+        ),
+        child: InkWell(
+          onTap: () async {
+            await _launchInBrowserView(Uri.parse(redirectLink));
+          },
+          child: Text(
+            redirectLink,
+            style: TextStyle(
+              fontSize: 23,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
