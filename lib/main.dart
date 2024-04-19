@@ -113,7 +113,13 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
           if (qrDataList.isNotEmpty) {
             final Map<String, dynamic> qrData = qrDataList.first;
-            isActive = qrData['is_active'] ?? false;
+            if (qrData['is_active'] is String) {
+              isActive = qrData['is_active'] == "true" ? true : false;
+            } else {
+              // If it's not a String, assume it's already a bool
+              isActive = qrData['is_active'] ?? false;
+            }
+
             print("qrdatalist isActive : $isActive");
             redirectLink = qrData['redirect_link'] ?? '';
             print("qrdatalist redirectLink: $redirectLink");
