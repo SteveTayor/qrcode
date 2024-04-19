@@ -47,11 +47,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
   String _scannedCode = '';
   String scaned = '';
-  static const String _appId = 'dowell.qrcodescan.app&hl=en&gl=US';
+  static const String _appId = 'dowell.qrcodescan.qpp&hl=en&gl=US';
   bool _showScanner = true;
   Map<String, dynamic> _extractedData = {};
   String extractedData = '';
-  bool isActive = false;
+  late bool isActive;
+  bool _isLoading = false;
   List<dynamic> data = [];
   late String scanned;
   late String qrcodeId;
@@ -112,7 +113,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
           if (qrDataList.isNotEmpty) {
             final Map<String, dynamic> qrData = qrDataList.first;
-            isActive = qrData['is_active'] == 'true' ? true : false;
+            isActive = qrData['is_active'] ?? false;
             print("qrdatalist isActive : $isActive");
             redirectLink = qrData['redirect_link'] ?? '';
             print("qrdatalist redirectLink: $redirectLink");
@@ -189,6 +190,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
       setState(() {
         extractedData = scanned;
         _showScanner = false;
+        _isLoading = true;
       });
       print('The scanned data is: $extractedData');
 
@@ -210,35 +212,28 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
             _extractedData = decryptedData;
             print(_extractedData);
             _showScanner = false;
+            _isLoading = false;
           });
-
-          if (data.isNotEmpty) {
-            final Map<String, dynamic> decryptqrCodeData = data.first;
-            isActive = decryptqrCodeData['is_active'] ?? false;
-            redirectLink = decryptqrCodeData['redirect_link'];
-          }
         }
       } else if (_isLink(extractedData)) {
         final Uri uri = Uri.parse(extractedData);
         qrcodeId = uri.pathSegments.last;
         print('QR code ID: $qrcodeId');
-        final qrCodeData = await getQrCodeById(qrcodeId);
-        print('The data from the get request is: $qrCodeData ');
         final decryptedData = await decryptQrcode(
           qrcodeId,
         );
         data = decryptedData['response'];
         print('The extracted data from decrypt endpoint: $decryptedData');
-        setState(() {
-          _extractedData = decryptedData;
-          print(_extractedData);
-          _showScanner = false;
-        });
+        await getQrCodeById(qrcodeId);
 
         if (isActive) {
           // await _launchURL(redirectLink);
           await _launchInBrowserView(Uri.parse(redirectLink));
         }
+        setState(() {
+          _showScanner = false;
+          _isLoading = false;
+        });
         // await _launchURL(extractedData);
       } else if (extractedData.contains('Deactivated')) {
         final splitedString = extractedData.split(' ');
@@ -313,7 +308,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                       cutOutSize: 350,
                     ),
                   )
-                : itemList.isEmpty == true
+                : _isLoading == true
                     ? Container(
                         height: 250,
                         width: 500,
@@ -324,6 +319,20 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                     : isActive
                         ? buildActiveQRCodeWidget(redirectLink)
                         : buildInactiveQRCodeWidget()),
+        if (!_showScanner)
+          Padding(
+            padding: const EdgeInsets.only(
+              bottom: 50,
+            ),
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _showScanner = true; // Show the scanner again
+                });
+              },
+              child: Text(' << Back'),
+            ),
+          ),
       ],
     ));
   }
@@ -332,6 +341,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.only(
+          top: 50,
           left: 28.0,
           right: 28,
         ),
