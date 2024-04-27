@@ -143,7 +143,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     } catch (error) {
       // An error occurred
       print('Error occurred during GET request: $error');
-      throw error;
+      rethrow;
     }
   }
 
@@ -339,7 +339,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                   _showScanner = true; // Show the scanner again
                 });
               },
-              child: Text(' << Back'),
+              child: const Text(' << Back'),
             ),
           ),
       ],
@@ -355,9 +355,9 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           right: 28,
         ),
         child: Container(
-          child: Column(
+          child: const Column(
             children: [
-              const Text(
+              Text(
                 'QR Code Not Activated',
                 style: TextStyle(
                   fontSize: 30,
@@ -393,7 +393,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           },
           child: Text(
             redirectLink,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 23,
               fontWeight: FontWeight.w600,
             ),
