@@ -297,7 +297,10 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   @override
   Widget build(BuildContext context) {
     late final List<dynamic> itemList = data;
-    print("The item list of the extracted data is:  $itemList");
+    var scanArea = (MediaQuery.of(context).size.width < 400 ||
+            MediaQuery.of(context).size.height < 400)
+        ? 150.0
+        : 300.0;
     return Scaffold(
         body: Column(
       children: [
@@ -307,11 +310,11 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                     key: _qrKey,
                     onQRViewCreated: _onQRViewCreated,
                     overlay: QrScannerOverlayShape(
-                      borderColor: const Color.fromARGB(30, 65, 137, 67),
+                      borderColor: Colors.red,
                       borderRadius: 10,
                       borderLength: 30,
                       borderWidth: 10,
-                      cutOutSize: 350,
+                      cutOutSize: scanArea,
                     ),
                   )
                 : _isLoading == true
