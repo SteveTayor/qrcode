@@ -240,7 +240,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           _showScanner = false;
           _isLoading = false;
         });
-        // await _launchURL(extractedData);
       } else if (extractedData.contains('Deactivated')) {
         final splitedString = extractedData.split(' ');
         if (splitedString.length > 4) {
@@ -251,10 +250,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           final qrCodeData = await getQrCodeById(qrId);
           print('The data from the get request is: $qrCodeData ');
           // Extract qrcode_id and iv from qrCodeData
-          final qrcodeId = qrCodeData['qrcode_id'];
-          final productName = qrCodeData['response'][0]['product_name'];
-          final qrcodeImageUrl = qrCodeData['response'][0]['qrcode_image_url'];
-          final createdBy = qrCodeData['response'][0]['created_by'];
 
           // final decryptedData = await decryptQrcode(qrcodeId, iv);
           // final decryptData = decryptedData['qrcode_id'];
@@ -264,9 +259,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
             print(_extractedData);
             _showScanner = false;
           });
-          // setState(() {
-          //   _extractedData = extractedData;
-          // });
         }
       } else {
         // Add a delay of 2 seconds before calling checkType
