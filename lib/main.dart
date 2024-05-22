@@ -1,6 +1,10 @@
 // ignore_for_file: avoid_print
 
+import 'dart:io';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 
 import 'package:url_launcher/url_launcher.dart';
@@ -14,13 +18,16 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Qr Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'Qr Code',
+      themeMode: ThemeMode.system,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: Colors.white,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
       home: const QrCodeScanner(),
@@ -39,22 +46,22 @@ class QrCodeScanner extends StatefulWidget {
   final double? height;
 
   @override
-  _QrCodeScannerState createState() => _QrCodeScannerState();
+  State<QrCodeScanner> createState() => _QrCodeScannerState();
 }
 
 class _QrCodeScannerState extends State<QrCodeScanner> {
   QRViewController? _controller;
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
   String _scannedCode = '';
-  String scaned = '';
-  static const String _appId = 'dowell.qrcodescan.qpp&hl=en&gl=US';
+  static const String _appId = 'dowell.qrcodescan.app&hl=en&gl=US';
   bool _showScanner = true;
-  Map<String, dynamic> _extractedData = {};
+
+  // Map<String, dynamic> _extractedData = {};
+
   String extractedData = '';
   late bool isActive;
   bool _isLoading = false;
   List<dynamic> data = [];
-  late String scanned;
   late String qrcodeId;
   String redirectLink = '';
 
@@ -62,32 +69,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   void dispose() {
     _controller?.dispose();
     super.dispose();
-  }
-
-  checkType(String scannedCode) async {
-    final splitedString = scannedCode.split(' ');
-    print('The splitted string is: $splitedString');
-    if (splitedString.length == 1) {
-      //either an old qr or link
-      setState(() {
-        _scannedCode = scannedCode;
-        scaned = scannedCode;
-        // FFAppState().qr = scannedCode;
-        _showScanner = false;
-      });
-
-      await launchAppStoreRedirect(_appId);
-    } else {
-      final qrId = splitedString[4];
-      setState(() {
-        _scannedCode = qrId;
-        scaned = qrId;
-        // FFAppState().qr = qrId;
-        _showScanner = false;
-      });
-
-      await launchAppStoreRedirect(_appId);
-    }
   }
 
   Future<Map<String, dynamic>> getQrCodeById(String id) async {
@@ -102,8 +83,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        // FFAppState().decryptActiveData = responseData; // Store decoded JSON data
-        // Extract is_active and redirect_link from the response
         final Map<String, dynamic> qrResponse = responseData['response'];
         print('qrResponse: $qrResponse');
 
@@ -119,7 +98,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               // If it's not a String, assume it's already a bool
               isActive = qrData['is_active'] ?? false;
             }
-
             print("qrdatalist isActive : $isActive");
             redirectLink = qrData['redirect_link'] ?? '';
             print("qrdatalist redirectLink: $redirectLink");
@@ -143,12 +121,11 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     } catch (error) {
       // An error occurred
       print('Error occurred during GET request: $error');
-      rethrow;
+      throw error;
     }
   }
 
 // Function to make a POST API request to decrypt QR code
-
   Future<Map<String, dynamic>> decryptQrcode(String qrcodeId) async {
     final url = Uri.parse(
         'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt/$qrcodeId/');
@@ -177,13 +154,19 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     } catch (error) {
       // An error occurred
       print('Error occurred during POST request: $error');
-      rethrow;
+      throw error;
     }
   }
 
   bool _isLink(String data) {
     final Uri? uri = Uri.tryParse(data);
     return uri != null && uri.scheme.isNotEmpty && uri.host.isNotEmpty;
+  }
+
+  bool _isValidQrCodeId(String id) {
+    final uuidRegex = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    return uuidRegex.hasMatch(id);
   }
 
   void _onQRViewCreated(QRViewController controller) async {
@@ -197,74 +180,97 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         extractedData = scanned;
         _showScanner = false;
         _isLoading = true;
+        // FFAppState().textChanged = true;
       });
       print('The scanned data is: $extractedData');
 
-      if (extractedData.contains('Decrypt it then Activate and Rescan')) {
-        final regex = RegExp(r'encrypted with (\S+) and (\S+)');
-        final match = regex.firstMatch(extractedData);
-        if (match != null) {
-          qrcodeId = match.group(1)!;
+      if (_isLink(_scannedCode)) {
+        final Uri uri = Uri.parse(_scannedCode);
+        qrcodeId = uri.pathSegments.last;
+
+        if (_isValidQrCodeId(qrcodeId)) {
           print('QR code ID: $qrcodeId');
-          // Make GET request to fetch QR code data by ID
-          final qrCodeData = await getQrCodeById(qrcodeId);
-          print('The data from the get request is: $qrCodeData ');
-          final decryptedData = await decryptQrcode(
-            qrcodeId,
-          );
+          final decryptedData = await decryptQrcode(qrcodeId);
           data = decryptedData['response'];
           print('The extracted data from decrypt endpoint: $decryptedData');
+          await getQrCodeById(qrcodeId);
+
+          if (isActive) {
+            await _launchInBrowserView(Uri.parse(redirectLink));
+          }
           setState(() {
-            _extractedData = decryptedData;
-            print(_extractedData);
             _showScanner = false;
             _isLoading = false;
           });
-        }
-      } else if (_isLink(extractedData)) {
-        final Uri uri = Uri.parse(extractedData);
-        qrcodeId = uri.pathSegments.last;
-        print('QR code ID: $qrcodeId');
-        final decryptedData = await decryptQrcode(
-          qrcodeId,
-        );
-        data = decryptedData['response'];
-        print('The extracted data from decrypt endpoint: $decryptedData');
-        await getQrCodeById(qrcodeId);
-
-        if (isActive) {
-          // await _launchURL(redirectLink);
-          await _launchInBrowserView(Uri.parse(redirectLink));
-        }
-        setState(() {
-          _showScanner = false;
-          _isLoading = false;
-        });
-      } else if (extractedData.contains('Deactivated')) {
-        final splitedString = extractedData.split(' ');
-        if (splitedString.length > 4) {
-          final qrId = splitedString[4];
-          print('The QR ID to fetch: $qrId');
-          // FFAppState().qr = qrId;
-          // Make GET request to fetch QR code data by ID
-          final qrCodeData = await getQrCodeById(qrId);
-          print('The data from the get request is: $qrCodeData ');
-          // Extract qrcode_id and iv from qrCodeData
-
-          // final decryptedData = await decryptQrcode(qrcodeId, iv);
-          // final decryptData = decryptedData['qrcode_id'];
-          // print('The extracted data from decrypt endpoint: $decryptData');
+        } else {
           setState(() {
-            _extractedData = qrCodeData;
-            print(_extractedData);
+            _scannedCode =
+                'This QR Code was not generated by DoWell QR Code Generator app';
             _showScanner = false;
+            _isLoading = false;
+          });
+
+          // Show the alert dialog after 10 seconds
+          Future.delayed(Duration(seconds: 10), () {
+            _showAlertDialog();
           });
         }
       } else {
         // Add a delay of 2 seconds before calling checkType
-        checkType(scanned);
+        setState(() {
+          _scannedCode =
+              'This QR Codes was not generated by DoWell QR Code Generator app';
+          _showScanner = false;
+          _isLoading = false;
+        });
+
+        // Show the alert dialog after 10 seconds
+        Future.delayed(Duration(seconds: 10), () {
+          _showAlertDialog();
+        });
       }
     });
+  }
+
+  void _showAlertDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return CupertinoAlertDialog(
+          content: Text("Do you still you want to open?"),
+          actions: [
+            TextButton(
+              style: ButtonStyle(
+                backgroundColor:
+                    MaterialStateProperty.all(Colors.green.shade700),
+              ),
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close the dialog
+                await launchAppStoreRedirect(_appId);
+              },
+              child: Text("Yes",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                  )),
+            ),
+            TextButton(
+              style: ButtonStyle(
+                backgroundColor: MaterialStateProperty.all(Colors.red),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: Text("No",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  )),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> launchAppStoreRedirect(String appId) async {
@@ -280,10 +286,37 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     }
   }
 
-  Future<void> _launchInBrowserView(Uri url) async {
+  Future<void> _launchView(Uri url) async {
     if (!await launchUrl(url, mode: LaunchMode.inAppBrowserView)) {
       throw Exception('Could not launch $url');
     }
+    // if (!await canLaunchUrl(url)) {
+    //   await launchUrl(
+    //       url); // Fallback to default behavior if platform specific fails
+    //   return;
+    // }
+  }
+
+  Future<void> _launchInBrowserView(Uri url) async {
+    try {
+      if (Platform.isAndroid) {
+        await launchUrl(url, mode: LaunchMode.inAppWebView);
+      }
+    } on PlatformException catch (error) {
+      _handleError(context, error);
+    } catch (error) {
+      _handleError(context, error);
+    }
+  }
+
+  void _handleError(BuildContext context, error) {
+    print("Error launching URL: $error");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to launch URL: $error'),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
   }
 
   @override
@@ -294,74 +327,77 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         ? 150.0
         : 300.0;
     return Scaffold(
-        body: Column(
-      children: [
-        Expanded(
-            child: _showScanner == true
-                ? QRView(
-                    key: _qrKey,
-                    onQRViewCreated: _onQRViewCreated,
-                    overlay: QrScannerOverlayShape(
-                      borderColor: Colors.red,
-                      borderRadius: 10,
-                      borderLength: 30,
-                      borderWidth: 10,
-                      cutOutSize: scanArea,
-                    ),
-                  )
-                : _isLoading == true
-                    ? Container(
-                        height: 250,
-                        width: 500,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                        ),
-                        child: const Center(child: CircularProgressIndicator()))
-                    : isActive
-                        ? buildActiveQRCodeWidget(redirectLink)
-                        : buildInactiveQRCodeWidget()),
-        if (!_showScanner)
-          Padding(
-            padding: const EdgeInsets.only(
-              bottom: 50,
+      body: Column(
+        children: [
+          Expanded(
+              child: _showScanner == true
+                  ? QRView(
+                      key: _qrKey,
+                      onQRViewCreated: _onQRViewCreated,
+                      overlay: QrScannerOverlayShape(
+                        borderColor: Color.fromARGB(30, 65, 137, 67),
+                        borderRadius: 10,
+                        borderLength: 30,
+                        borderWidth: 10,
+                        cutOutSize: 350,
+                      ),
+                    )
+                  : _isLoading == true
+                      ? Center(child: CircularProgressIndicator())
+                      : isActive
+                          ? buildActiveQRCodeWidget(redirectLink)
+                          : buildInactiveQRCodeWidget()),
+          if (_scannedCode != '')
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                _scannedCode,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red, // Customize the color as needed
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _showScanner = true; // Show the scanner again
-                });
-              },
-              child: const Text(' << Back'),
+          if (!_showScanner)
+            Padding(
+              padding: const EdgeInsets.only(
+                bottom: 70,
+              ),
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _showScanner = true; // Show the scanner again
+                  });
+                },
+                child: Text('rescan',
+                    style: TextStyle(
+                      color: Theme.of(context).primaryColor,
+                      fontSize: 15,
+                    )),
+              ),
             ),
-          ),
-      ],
-    ));
+        ],
+      ),
+    );
   }
 
   Widget buildInactiveQRCodeWidget() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.only(
-          top: 50,
           left: 28.0,
           right: 28,
         ),
         child: Container(
-          child: const Column(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'QR Code Not Activated',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 20),
               SelectableText(
                 'The QR code is not activated yet. Use the QR code app to activate your QR code.',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                 ),
               ),
               SizedBox(height: 20),
@@ -379,18 +415,39 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           left: 28.0,
           right: 28,
         ),
-        child: InkWell(
-          onTap: () async {
-            await _launchInBrowserView(Uri.parse(redirectLink));
-          },
-          child: Text(
-            redirectLink,
-            style: const TextStyle(
-              fontSize: 23,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.center,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (Platform.isAndroid)
+              InkWell(
+                onTap: () async {
+                  await _launchInBrowserView(Uri.parse(redirectLink));
+                },
+                child: Text(
+                  redirectLink,
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            if (Platform.isIOS)
+              InkWell(
+                onTap: () async {
+                  await _launchView(Uri.parse(redirectLink));
+                },
+                child: Text(
+                  redirectLink,
+                  style: TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
         ),
       ),
     );
