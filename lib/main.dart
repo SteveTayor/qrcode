@@ -372,20 +372,22 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               onTap: () {
                 setState(() {
                   _showScanner = true;
+                  isActive = !isActive!;
+
                 });
               },
               child: Padding(
-                padding: const EdgeInsets.only(left: 25.0, right: 25, bottom: 30, top: 10),
+                padding: const EdgeInsets.only(left: 25.0, right: 25, bottom: 40, top: 10),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(25),
                     color: Colors.grey.shade600,
                   ),
-                  width: MediaQuery.of(context).size.width,
+                  width: MediaQuery.of(context).size.width ,
                   height: 60,
                   child: Center(
                     child: Text(
-                      'Rescan',
+                      'Rescan' ,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 22,
