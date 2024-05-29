@@ -55,6 +55,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   String _scannedCode = '';
   static const String _appId = 'dowell.qrcodescan.app&hl=en&gl=US';
   bool _showScanner = true;
+
   String extractedData = '';
   bool? isActive;
   bool _isLoading = false;
@@ -68,9 +69,9 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> getQrCodeById(String id) async {
+  Future<Map<String, dynamic>> getMasterQrCodeById(String id) async {
     final url = Uri.parse(
-        'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt-qrcode/?id=$id');
+        'https://www.qrcodereviews.uxlivinglab.online/api/v6/master-qrcodes/11-$id');
 
     try {
       final response = await http.get(
@@ -80,50 +81,20 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        final Map<String, dynamic> qrResponse = responseData['response'];
-        print('qrResponse: $qrResponse');
-
-        if (qrResponse.containsKey('data')) {
-          final List<dynamic> qrDataList = qrResponse['data'];
-          print("qrdatalist : $qrDataList");
-
-          if (qrDataList.isNotEmpty) {
-            final Map<String, dynamic> qrData = qrDataList.first;
-            if (qrData['is_active'] is String) {
-              isActive = qrData['is_active'] == "true";
-            } else {
-              // If it's not a String, assume it's already a bool
-              isActive = qrData['is_active'] ?? false;
-            }
-            print("qrdatalist isActive : $isActive");
-            redirectLink = qrData['redirect_link'] ?? '';
-            print("qrdatalist redirectLink: $redirectLink");
-
-            return responseData;
-          } else {
-            throw Exception('No data found for QR code ID: $id');
-          }
-        } else {
-          throw Exception('No data key found in response.');
-        }
+        return responseData;
       } else {
-        // Request failed
-        print('GET request failed with status code: ${response.statusCode}');
-        print('Response body: ${response.body}');
         throw Exception(
             'Failed to get QR code data. Status Code: ${response.statusCode}');
       }
     } catch (error) {
-      // An error occurred
       print('Error occurred during GET request: $error');
       throw error;
     }
   }
 
-  // Function to make a POST API request to decrypt QR code
-  Future<Map<String, dynamic>> decryptQrcode(String qrcodeId) async {
+  Future<Map<String, dynamic>> getChildQrCodeDetails(String id) async {
     final url = Uri.parse(
-        'https://www.qrcodereviews.uxlivinglab.online/api/v5/decrypt/$qrcodeId/');
+        'https://www.qrcodereviews.uxlivinglab.online/api/v6/qrcodes/$id');
 
     try {
       final response = await http.get(
@@ -132,23 +103,14 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
       );
 
       if (response.statusCode == 200) {
-        // Request was successful
-        print('POST request successful');
-        print('Response body: ${response.body}');
-
-        // Parse the response JSON
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final responseData = json.decode(response.body);
         return responseData;
       } else {
-        // Request failed
-        print('POST request failed with status code: ${response.statusCode}');
-        print('Response body: ${response.body}');
         throw Exception(
-            'Failed to decrypt QR code. Status Code: ${response.statusCode}');
+            'Failed to get QR code details. Status Code: ${response.statusCode}');
       }
     } catch (error) {
-      // An error occurred
-      print('Error occurred during POST request: $error');
+      print('Error occurred during GET request: $error');
       throw error;
     }
   }
@@ -175,22 +137,36 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         extractedData = scanned;
         _showScanner = false;
         _isLoading = true;
-        _scannedCode = scanned;
+        // FFAppState().textChanged = true;
       });
       print('The scanned data is: $extractedData');
 
       if (_isLink(extractedData)) {
         final Uri uri = Uri.parse(extractedData);
-        qrcodeId = uri.pathSegments.last;
+        final lastSegment = uri.pathSegments.last;
 
-        if (_isValidQrCodeId(qrcodeId)) {
-          print('QR code ID: $qrcodeId');
-          final decryptedData = await decryptQrcode(qrcodeId);
-          data = decryptedData['response'];
-          print('The extracted data from decrypt endpoint: $decryptedData');
-          await getQrCodeById(qrcodeId);
+        if (lastSegment.startsWith("11-")) {
+          qrcodeId = lastSegment.substring(3);
 
-          if (isActive!) {
+          if (_isValidQrCodeId(qrcodeId)) {
+            print('QR code ID: $qrcodeId');
+            final masterData = await getMasterQrCodeById(qrcodeId);
+            final List<dynamic> qrCodeIds = masterData['qr_code_ids'];
+
+            if (qrCodeIds.isNotEmpty) {
+              for (var qrCode in qrCodeIds) {
+                final qrCodeId = qrCode['qr_id'];
+                final qrCodeDetails = await getChildQrCodeDetails(qrCodeId);
+                isActive = qrCodeDetails['is_active'];
+                redirectLink = qrCodeDetails['redirect_link'] ?? '';
+
+                if (isActive == true) {
+                  await _launchInBrowserView(Uri.parse(redirectLink));
+                  break;
+                }
+              }
+            }
+
             setState(() {
               _showScanner = false;
               _isLoading = false;
@@ -198,19 +174,26 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           } else {
             setState(() {
               _scannedCode =
-                  'The QR code is not activated yet. Use the QR code app to activate your QR code.';
+                  'This QR Code was not generated by DoWell QR Code Generator app';
               _showScanner = false;
               _isLoading = false;
+            });
+
+            Future.delayed(Duration(seconds: 10), () {
+              _showAlertDialog();
             });
           }
         } else {
           setState(() {
             _scannedCode =
-                'This QR Code was not generated by DoWell QR Code Generator app';
+                'Invalid QR Code format. Please scan a valid QR Code.';
             _showScanner = false;
             _isLoading = false;
           });
-          _showAlertDialog();
+
+          Future.delayed(Duration(seconds: 10), () {
+            _showAlertDialog();
+          });
         }
       } else {
         setState(() {
@@ -219,7 +202,10 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           _showScanner = false;
           _isLoading = false;
         });
-        _showAlertDialog();
+
+        Future.delayed(Duration(seconds: 10), () {
+          _showAlertDialog();
+        });
       }
     });
   }
@@ -229,9 +215,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
       context: context,
       builder: (BuildContext context) {
         return CupertinoAlertDialog(
-          content: Text("Do you still want to open?", style: TextStyle(
-            fontSize: 16,
-          ),),
+          content: Text(
+            "Do you still want to open?",
+            style: TextStyle(
+              fontSize: 18,
+            ),
+          ),
           actions: [
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -241,12 +230,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                       MaterialStateProperty.all(Colors.green.shade700),
                 ),
                 onPressed: () async {
-                  Navigator.of(context).pop(); // Close the dialog
+                  Navigator.of(context).pop();
                   await launchAppStoreRedirect(_appId);
                 },
                 child: Text("Yes",
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       color: Colors.white,
                     )),
               ),
@@ -258,12 +247,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                   backgroundColor: MaterialStateProperty.all(Colors.red),
                 ),
                 onPressed: () {
-                  Navigator.of(context).pop(); // Close the dialog
+                  Navigator.of(context).pop();
                 },
                 child: Text("No",
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
+                      fontSize: 15,
                     )),
               ),
             ),
@@ -274,16 +263,13 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   }
 
   Future<void> launchAppStoreRedirect(String appId) async {
-    // Handle platform-specific redirection
     if (await canLaunchUrl(Uri.parse('market://details?id=$appId'))) {
-      await launchUrl(Uri.parse('market://details?id=$appId')); // Play Store
+      await launchUrl(Uri.parse('market://details?id=$appId'));
     } else if (await canLaunchUrl(
         Uri.parse('https://play.google.com/store/apps/details?id=$appId'))) {
-      await launchUrl(Uri.parse(
-          'https://play.google.com/store/apps/details?id=$appId')); // Web fallback
-    } else {
-      // Handle cases where redirection is not possible
-    }
+      await launchUrl(
+          Uri.parse('https://play.google.com/store/apps/details?id=$appId'));
+    } else {}
   }
 
   Future<void> _launchView(Uri url) async {
@@ -316,15 +302,12 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
   @override
   Widget build(BuildContext context) {
-    var scanArea = (MediaQuery.of(context).size.width < 400 ||
-            MediaQuery.of(context).size.height < 400)
-        ? 150.0
-        : 300.0;
     return Scaffold(
+      appBar: AppBar(title: Text('QR Code')),
       body: Column(
         children: [
           Expanded(
-            child: _showScanner
+            child: _showScanner == true
                 ? QRView(
                     key: _qrKey,
                     onQRViewCreated: _onQRViewCreated,
@@ -340,13 +323,19 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                     ? Center(child: CircularProgressIndicator())
                     : _buildMessageWidget(),
           ),
-          if(isActive == true)
+          if (isActive == true)
             InkWell(
               onTap: () async {
-                await _launchInBrowserView(Uri.parse(redirectLink));
+                if (Platform.isAndroid)
+                  await _launchInBrowserView(Uri.parse(redirectLink));
+
+                if (Platform.isIOS) {
+                  await _launchView(Uri.parse(redirectLink));
+                }
               },
               child: Padding(
-                padding: const EdgeInsets.only(left: 25.0, right: 25, bottom: 10, top: 10),
+                padding: const EdgeInsets.only(
+                    left: 25.0, right: 25, bottom: 10, top: 10),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(25),
@@ -372,26 +361,27 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               onTap: () {
                 setState(() {
                   _showScanner = true;
-                  isActive = !isActive!;
-
+                  _scannedCode = '';
+                  extractedData = '';
+                  isActive = null;
                 });
               },
               child: Padding(
-                padding: const EdgeInsets.only(left: 25.0, right: 25, bottom: 40, top: 10),
+                padding: const EdgeInsets.only(
+                    left: 25.0, right: 25, bottom: 30, top: 10),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(25),
                     color: Colors.grey.shade600,
                   ),
-                  width: MediaQuery.of(context).size.width ,
+                  width: MediaQuery.of(context).size.width,
                   height: 60,
                   child: Center(
                     child: Text(
-                      'Rescan' ,
+                      'Rescan',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 22,
-                        //fontWeight: FontWeight.w600,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -399,7 +389,6 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                 ),
               ),
             ),
-
         ],
       ),
     );
@@ -464,6 +453,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           style: TextStyle(
             fontSize: 23,
             fontWeight: FontWeight.w600,
+            color: Colors.grey.shade800,
           ),
           textAlign: TextAlign.center,
         ),
