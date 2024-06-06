@@ -94,7 +94,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
   Future<Map<String, dynamic>> getChildQrCodeDetails(String id) async {
     final url = Uri.parse(
-        'https://www.qrcodereviews.uxlivinglab.online/api/v6/qrcodes/$id');
+        'https://www.qrcodereviews.uxlivinglab.online/api/v6/qrcodes/22-$id');
 
     try {
       final response = await http.get(
@@ -123,7 +123,8 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   bool _isValidQrCodeId(String id) {
     final uuidWithPrefixRegex = RegExp(
         r'^22-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-    return uuidWithPrefixRegex.hasMatch(id);
+    return uuidWithPrefixRegex
+        .hasMatch('22-$id'); // Add '22-' prefix for validation
   }
 
   void _onQRViewCreated(QRViewController controller) async {
@@ -144,12 +145,14 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
       if (_isLink(extractedData)) {
         final Uri uri = Uri.parse(extractedData);
         final lastSegment = uri.pathSegments.last;
+        print('Last segment of URL: $lastSegment');
 
         if (lastSegment.startsWith("22-")) {
           qrcodeId = lastSegment.substring(3);
+          print('Extracted QR code ID: $qrcodeId');
 
           if (_isValidQrCodeId(qrcodeId)) {
-            print('QR code ID: $qrcodeId');
+            print('QR code ID is valid: $qrcodeId');
             // final masterData = await getMasterQrCodeById(qrcodeId);
             // final List<dynamic> qrCodeIds = masterData['qr_code_ids'];
             final qrCodeDetails = await getChildQrCodeDetails(qrcodeId);
