@@ -121,9 +121,9 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
   }
 
   bool _isValidQrCodeId(String id) {
-    final uuidRegex = RegExp(
-        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-    return uuidRegex.hasMatch(id);
+    final uuidWithPrefixRegex = RegExp(
+        r'^22-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    return uuidWithPrefixRegex.hasMatch(id);
   }
 
   void _onQRViewCreated(QRViewController controller) async {
@@ -145,26 +145,35 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
         final Uri uri = Uri.parse(extractedData);
         final lastSegment = uri.pathSegments.last;
 
-        if (lastSegment.startsWith("11-")) {
+        if (lastSegment.startsWith("22-")) {
           qrcodeId = lastSegment.substring(3);
 
           if (_isValidQrCodeId(qrcodeId)) {
             print('QR code ID: $qrcodeId');
-            final masterData = await getMasterQrCodeById(qrcodeId);
-            final List<dynamic> qrCodeIds = masterData['qr_code_ids'];
+            // final masterData = await getMasterQrCodeById(qrcodeId);
+            // final List<dynamic> qrCodeIds = masterData['qr_code_ids'];
+            final qrCodeDetails = await getChildQrCodeDetails(qrcodeId);
+            isActive = qrCodeDetails['is_active'] ?? false;
+            redirectLink = qrCodeDetails['redirect_link'] ?? '';
+            // if (FFAppState().response != null) {
+            //   final Map<String, dynamic> responseMap = FFAppState().response;
+            //   if (responseMap.containsKey('product') == 'all') {
+            //     if (responseMap.containsKey('org_id')) {
+            //       FFAppState().workspaceId = responseMap['org_id'];
+            //       workspace_id = FFAppState().workspaceId;
+            //     }
 
-            if (qrCodeIds.isNotEmpty) {
-              for (var qrCode in qrCodeIds) {
-                final qrCodeId = qrCode['qr_id'];
-                final qrCodeDetails = await getChildQrCodeDetails(qrCodeId);
-                isActive = qrCodeDetails['is_active'];
-                redirectLink = qrCodeDetails['redirect_link'] ?? '';
-
-                if (isActive == true) {
-                  await _launchInBrowserView(Uri.parse(redirectLink));
-                  break;
-                }
-              }
+            //     if (responseMap.containsKey('portfolio_name')) {
+            //       FFAppState().portfolioId = responseMap['portfolio_name'];
+            //       portfolio_name = FFAppState().portfolioId;
+            //     } else {
+            //       // Handle the case where "response" is not present
+            //       print('WARNING: response not found.');
+            //     }
+            //   }
+            // }
+            if (isActive == true) {
+              await _launchInBrowserView(Uri.parse(redirectLink));
             }
 
             setState(() {
@@ -183,10 +192,16 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               _showAlertDialog();
             });
           }
+        } else if (lastSegment.startsWith("11-")) {
+          setState(() {
+            _scannedCode = 'You are not authorized to scan a master qr code.';
+            _showScanner = false;
+            _isLoading = false;
+          });
         } else {
           setState(() {
             _scannedCode =
-                'Invalid QR Code format. Please scan a valid QR Code.';
+                'Invalid QR Code format. Please scan a valid Dowell QR Code.';
             _showScanner = false;
             _isLoading = false;
           });
