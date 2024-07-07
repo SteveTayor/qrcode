@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
+import 'package:geolocator/geolocator.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -69,28 +71,84 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
     super.dispose();
   }
 
-  Future<Map<String, dynamic>> getMasterQrCodeById(String id) async {
-    final url = Uri.parse(
-        'https://www.qrcodereviews.uxlivinglab.online/api/v6/master-qrcodes/11-$id');
-
+  Future<Map<String, double>?> getUserLocation() async {
     try {
-      final response = await http.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        return responseData;
-      } else {
-        throw Exception(
-            'Failed to get QR code data. Status Code: ${response.statusCode}');
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          return null;
+        }
       }
-    } catch (error) {
-      print('Error occurred during GET request: $error');
-      throw error;
+      Position position = await Geolocator.getCurrentPosition();
+      return {'latitude': position.latitude, 'longitude': position.longitude};
+    } catch (e) {
+      print('Error getting location: $e');
+      return null;
     }
   }
+
+  Future<void> sendQrCodeData({
+    required String qrId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      String url =
+          'https://www.qrcodereviews.uxlivinglab.online/api/v6/qrcode-data/';
+      String timezone = DateTime.now().timeZoneName;
+      debugPrint('timezone: $timezone');
+      debugPrint('lat: $latitude');
+      debugPrint('long: $longitude');
+
+      Map<String, String> payload = {
+        'qrcode_id': qrId,
+        'timezone': timezone,
+        'lat': latitude.toString(),
+        'long': longitude.toString(),
+      };
+      debugPrint(payload.toString());
+
+      http.Response response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 201) {
+        print('Data sent successfully');
+      } else {
+        print('Failed to send data: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error sending data: $e');
+    }
+  }
+
+  // Future<Map<String, dynamic>> getMasterQrCodeById(String id) async {
+  //   final url = Uri.parse(
+  //       'https://www.qrcodereviews.uxlivinglab.online/api/v6/master-qrcodes/11-$id');
+
+  //   try {
+  //     final response = await http.get(
+  //       url,
+  //       headers: {'Content-Type': 'application/json'},
+  //     );
+
+  //     if (response.statusCode == 200) {
+  //       final responseData = json.decode(response.body);
+  //       return responseData;
+  //     } else {
+  //       throw Exception(
+  //           'Failed to get QR code data. Status Code: ${response.statusCode}');
+  //     }
+  //   } catch (error) {
+  //     print('Error occurred during GET request: $error');
+  //     throw error;
+  //   }
+  // }
 
   Future<Map<String, dynamic>> getChildQrCodeDetails(String id) async {
     final url = Uri.parse(
@@ -156,6 +214,19 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
             // final masterData = await getMasterQrCodeById(qrcodeId);
             // final List<dynamic> qrCodeIds = masterData['qr_code_ids'];
             final qrCodeDetails = await getChildQrCodeDetails(qrcodeId);
+            final location = await getUserLocation();
+            if (location != null) {
+              double latitude = location['latitude']!;
+              double longitude = location['longitude']!;
+
+              await sendQrCodeData(
+                qrId: lastSegment,
+                latitude: latitude,
+                longitude: longitude,
+              );
+            } else {
+              print('Unable to get user location.');
+            }
             isActive = qrCodeDetails['is_active'] ?? false;
             redirectLink = qrCodeDetails['redirect_link'] ?? '';
             // if (FFAppState().response != null) {
