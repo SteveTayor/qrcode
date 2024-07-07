@@ -118,6 +118,25 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
+
+        // Extract necessary fields from the response
+        var isActiveValue = responseData['is_active'];
+
+        if (isActiveValue is String) {
+          isActive = isActiveValue.toLowerCase() == 'true';
+        } else if (isActiveValue is bool) {
+          isActive = isActiveValue;
+        } else {
+          isActive =
+              false; // Default to false if the type is neither String nor bool
+        }
+
+        redirectLink = responseData['redirect_link'] ?? '';
+
+        debugPrint('isActive: $isActive');
+        debugPrint('redirectLink: $redirectLink');
+
+        // Return the entire responseData or any other relevant part
         return responseData;
       } else {
         throw Exception(
@@ -191,7 +210,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           if (_isValidQrCodeId(qrcodeId)) {
             print('QR code ID is valid: $qrcodeId');
 
-            final qrCodeDetails = await getChildQrCodeDetails(qrcodeId);
+            await getChildQrCodeDetails(qrcodeId);
 
             // Get user location
             // final location = await getUserLocation();
@@ -209,14 +228,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
             // } else {
             //   print('Unable to get user location.');
             // }
-            if (qrCodeDetails['is_active'] is String) {
-              isActive = qrCodeDetails['is_active'] == "true" ? true : false;
-            } else {
-              // If it's not a String, assume it's already a bool
 
-              isActive = qrCodeDetails['is_active'] ?? false;
-            }
-            redirectLink = qrCodeDetails['redirect_link'] ?? '';
             if (FFAppState().response != null) {
               final Map<String, dynamic> responseMap = FFAppState().response;
               if (responseMap.containsKey('product') == 'all') {
@@ -358,25 +370,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
                                     if (_isValidQrCodeId(qrcodeId)) {
                                       print('QR code ID is valid: $qrcodeId');
 
-                                      final qrCodeDetails =
-                                          await getChildQrCodeDetails(qrcodeId);
-                                      if (qrCodeDetails['is_active']
-                                          is String) {
-                                        isActive =
-                                            qrCodeDetails['is_active'] == "true"
-                                                ? true
-                                                : false;
-                                      } else {
-                                        // If it's not a String, assume it's already a bool
-
-                                        isActive =
-                                            qrCodeDetails['is_active'] ?? false;
-                                      }
-
-                                      isActive =
-                                          qrCodeDetails['is_active'] ?? false;
-                                      redirectLink =
-                                          qrCodeDetails['redirect_link'] ?? '';
+                                      await getChildQrCodeDetails(qrcodeId);
 
                                       if (isActive == true) {
                                         await _launchInBrowserView(
