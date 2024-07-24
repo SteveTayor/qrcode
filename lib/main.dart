@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qrcode/qr_code.dart';
 import 'dart:convert';
 
 import 'package:url_launcher/url_launcher.dart';
@@ -37,8 +38,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class QrCodeScanner extends StatefulWidget {
-  const QrCodeScanner({
+class QrCodeScanner1 extends StatefulWidget {
+  const QrCodeScanner1({
     super.key,
     this.width,
     this.height,
@@ -48,10 +49,10 @@ class QrCodeScanner extends StatefulWidget {
   final double? height;
 
   @override
-  State<QrCodeScanner> createState() => _QrCodeScannerState();
+  State<QrCodeScanner1> createState() => _QrCodeScanner1State();
 }
 
-class _QrCodeScannerState extends State<QrCodeScanner> {
+class _QrCodeScanner1State extends State<QrCodeScanner1> {
   QRViewController? _controller;
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
   String _scannedCode = '';

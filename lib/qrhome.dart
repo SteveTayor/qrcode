@@ -1,17 +1,18 @@
 // Automatic FlutterFlow imports
-import '/backend/backend.dart';
-import '/backend/schema/structs/index.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/custom_code/widgets/index.dart'; // Imports other custom widgets
-import '/custom_code/actions/index.dart'; // Imports custom actions
-import '/flutter_flow/custom_functions.dart'; // Imports custom functions
-import 'package:flutter/material.dart';
+// import '/backend/backend.dart';
+// import '/backend/schema/structs/index.dart';
+// import '/flutter_flow/flutter_flow_theme.dart';
+// import '/flutter_flow/flutter_flow_util.dart';
+// import '/custom_code/widgets/index.dart'; // Imports other custom widgets
+// import '/custom_code/actions/index.dart'; // Imports custom actions
+// import '/flutter_flow/custom_functions.dart'; // Imports custom functions
+// import 'package:flutter/material.dart';
 // Begin custom widget code
 // DO NOT REMOVE OR MODIFY THE CODE ABOVE!
 
+import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:intl/intl.dart';
+// import 'package:intl/intl.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'dart:io';
@@ -21,18 +22,18 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
-class QrCodeScanner extends StatefulWidget {
-  const QrCodeScanner({super.key, this.width, this.height, this.productType});
+class QrCodeScanner2 extends StatefulWidget {
+  const QrCodeScanner2({super.key, this.width, this.height, this.productType});
 
   final double? width;
   final double? height;
   final String? productType;
 
   @override
-  State<QrCodeScanner> createState() => _QrCodeScannerState();
+  State<QrCodeScanner2> createState() => _QrCodeScanner2State();
 }
 
-class _QrCodeScannerState extends State<QrCodeScanner> {
+class _QrCodeScanner2State extends State<QrCodeScanner2> {
   QRViewController? _controller;
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
   String _scannedCode = '';
@@ -218,47 +219,47 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
             //   double latitude = location['latitude']!;
             //   double longitude = location['longitude']!;
 
-            double lat = double.parse(FFAppState().latitude);
-            double long = double.parse(FFAppState().longitude);
-            await sendQrCodeData(
-              qrId: lastSegment,
-              latitude: lat,
-              longitude: long,
-            );
+            // double lat = double.parse(FFAppState().latitude);
+            // double long = double.parse(FFAppState().longitude);
+            // await sendQrCodeData(
+            //   qrId: lastSegment,
+            //   latitude: lat,
+            //   longitude: long,
+            // );
             // } else {
             //   print('Unable to get user location.');
             // }
 
-            if (FFAppState().response != null) {
-              final Map<String, dynamic> responseMap = FFAppState().response;
-              if (responseMap.containsKey('product') == 'all') {
-                if (responseMap.containsKey('org_id')) {
-                  FFAppState().workspaceId = responseMap['org_id'];
-                  workspace_id = FFAppState().workspaceId;
-                }
+            // if (FFAppState().response != null) {
+            //   final Map<String, dynamic> responseMap = FFAppState().response;
+            //   if (responseMap.containsKey('product') == 'all') {
+            //     if (responseMap.containsKey('org_id')) {
+            //       FFAppState().workspaceId = responseMap['org_id'];
+            //       workspace_id = FFAppState().workspaceId;
+            //     }
 
-                if (responseMap.containsKey('portfolio_name')) {
-                  FFAppState().portfolioId = responseMap['portfolio_name'];
-                  portfolio_name = FFAppState().portfolioId;
-                } else {
-                  // Handle the case where "response" is not present
-                  print('WARNING: response not found.');
-                }
-              }
-            }
+            //     if (responseMap.containsKey('portfolio_name')) {
+            //       FFAppState().portfolioId = responseMap['portfolio_name'];
+            //       portfolio_name = FFAppState().portfolioId;
+            //     } else {
+            //       // Handle the case where "response" is not present
+            //       print('WARNING: response not found.');
+            //     }
+            //   }
+            // }
 
             if (isActive == true) {
               if (widget.productType != null) {
                 if (widget.productType == "waste") {
                   if (redirectLink.contains(
                       "https://100093.pythonanywhere.com/linklanding")) {
-                    print("Assigned Team ${FFAppState().assignedTeamName}");
+                    // print("Assigned Team ${FFAppState().assignedTeamName}");
                     final Uri refinedRedirectUri = Uri.parse(redirectLink);
 
                     await _launchInBrowserView(
                         Uri.parse(refinedRedirectUri.replace(queryParameters: {
                       ...refinedRedirectUri.queryParameters,
-                      'team_name': FFAppState().assignedTeamName
+                      // 'team_name': FFAppState().assignedTeamName
                     }).toString()));
                   }
                 } else if (widget.productType == "school" ||
@@ -308,13 +309,13 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
           //   double latitude = location['latitude']!;
           //   double longitude = location['longitude']!;
 
-          double lat = double.parse(FFAppState().latitude);
-          double long = double.parse(FFAppState().longitude);
-          await sendQrCodeData(
-            qrId: lastSegment,
-            latitude: lat,
-            longitude: long,
-          );
+          // double lat = double.parse(FFAppState().latitude);
+          // double long = double.parse(FFAppState().longitude);
+          // await sendQrCodeData(
+          //   qrId: lastSegment,
+          //   latitude: lat,
+          //   longitude: long,
+          // );
           // } else {
           //   print('Unable to get user location.');
           // }
@@ -445,7 +446,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               child: TextButton(
                 style: ButtonStyle(
                   backgroundColor:
-                      WidgetStateProperty.all(Colors.green.shade700),
+                      MaterialStateProperty.all(Colors.green.shade700),
                 ),
                 onPressed: () async {
                   Navigator.of(context).pop();
@@ -463,7 +464,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               padding: const EdgeInsets.all(8.0),
               child: TextButton(
                 style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.all(Colors.red),
+                  backgroundColor: MaterialStateProperty.all(Colors.red),
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -498,7 +499,7 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               child: TextButton(
                 style: ButtonStyle(
                   backgroundColor:
-                      WidgetStateProperty.all(Colors.green.shade700),
+                      MaterialStateProperty.all(Colors.green.shade700),
                 ),
                 onPressed: () async {
                   String uri =
@@ -520,8 +521,8 @@ class _QrCodeScannerState extends State<QrCodeScanner> {
               padding: const EdgeInsets.all(8.0),
               child: TextButton(
                 style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.all(Colors.red),
-                ),
+                    // backgroundColor: WidgetStateProperty.all(Colors.red),
+                    ),
                 onPressed: () {
                   Navigator.of(context).pop();
                 },
